@@ -15,13 +15,10 @@ M.setup = function(opts)
 end
 
 ---Open a floating window used to display az cli
----@param cmd? string[]
+---@param cmd string[]
 ---@param opts? {win?:integer}
 function M.show(cmd, opts)
   opts = opts or {}
-  cmd = cmd or { 'account', 'show' }
-  print(vim.inspect(cmd))
-
   -- Create an immutable scratch buffer that is wiped once hidden
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_set_option_value('bufhidden', 'wipe', { buf = buf })
@@ -61,9 +58,14 @@ M.call = function(cmd)
   if results.code ~= 0 then
     return nil, results.stderr
   end
+  if results.stdout == '' then
+    return {}
+  end
   local response = vim.json.decode(results.stdout)
   return response
 end
+
+--print(vim.inspect(M.call { 'account', 'list' }))
 
 -- telescope extension for picking active azcli account
 M.account_list = function(opts)
@@ -91,8 +93,14 @@ M.account_list = function(opts)
       previewer = previewers.new_buffer_previewer {
         title = 'Subscription Info',
         define_preview = function(self, entry)
-          vim.api.nvim_buf_set_lines(self.state.bufnr, 0, 0, true, vim.insect(entry))
-          utils.highlighter(self.state.bufnr, 'json')
+          local lines = {}
+          for k, v in pairs(entry.value) do
+            if type(v) ~= 'table' then
+              local line = string.format('%s = %s', k, v)
+              table.insert(lines, line)
+            end
+          end
+          vim.api.nvim_buf_set_lines(self.state.bufnr, 0, 0, true, lines)
         end,
       },
 
@@ -101,7 +109,12 @@ M.account_list = function(opts)
           local selection = action_state.get_selected_entry()
           actions.close(prompt_bufnr)
           local cmd = { 'account', 'set', '--subscription', selection.value.name }
-          M.call(cmd)
+          local results, err = M.call(cmd)
+          if err then
+            vim.notify(err)
+          else
+            vim.notify(string.format('Azcli subscription set to %s', selection.value.name))
+          end
         end)
         return true
       end,
