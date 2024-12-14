@@ -1,5 +1,11 @@
--- This module will get autoloaded when neovim starts
--- rename the parent directory to your plugin name.
+local conf = require('telescope.config').values
+local pickers = require 'telescope.pickers'
+local actions = require 'telescope.actions'
+local action_state = require 'telescope.actions.state'
+local finders = require 'telescope.finders'
+local previewers = require 'telescope.previewers'
+local utils = require 'telescope.previewers.utils'
+--local plenary = require 'plenary'
 
 local M = {}
 
@@ -9,9 +15,12 @@ M.setup = function(opts)
 end
 
 ---Open a floating window used to display az cli
+---@param cmd? string[]
 ---@param opts? {win?:integer}
-function M.show(opts)
+function M.show(cmd, opts)
   opts = opts or {}
+  cmd = cmd or { 'account', 'show' }
+  print(vim.inspect(cmd))
 
   -- Create an immutable scratch buffer that is wiped once hidden
   local buf = vim.api.nvim_create_buf(false, true)
@@ -37,7 +46,66 @@ function M.show(opts)
   -- Change to the window that is floating to ensure termopen uses correct size
   vim.api.nvim_set_current_win(win)
 
-  vim.fn.termopen { 'az', 'account', 'show' }
+  vim.fn.termopen { 'az', unpack(cmd) }
 end
 
+---Call azcli with cmd and return results as table.
+---@return table|nil, string?
+---@param cmd string[]
+M.call = function(cmd)
+  if vim.list_contains(cmd, '-o') or vim.list_contains(cmd, '--output') then
+    return nil, 'Only json output is supported.'
+  end
+  local full_cmd = { 'az', unpack(cmd) }
+  local results = vim.system(full_cmd, { text = true }):wait()
+  if results.code ~= 0 then
+    return nil, results.stderr
+  end
+  local response = vim.json.decode(results.stdout)
+  return response
+end
+
+-- telescope extension for picking active azcli account
+M.account_list = function(opts)
+  pickers
+    .new(opts, {
+      finder = finders.new_dynamic {
+        fn = function()
+          local results = M.call { 'account', 'list' }
+          return results
+        end,
+
+        entry_maker = function(entry)
+          if entry then
+            return {
+              value = entry,
+              display = entry.name,
+              ordinal = entry.name,
+            }
+          end
+        end,
+      },
+
+      sorter = conf.generic_sorter(opts),
+
+      previewer = previewers.new_buffer_previewer {
+        title = 'Subscription Info',
+        define_preview = function(self, entry)
+          vim.api.nvim_buf_set_lines(self.state.bufnr, 0, 0, true, vim.insect(entry))
+          utils.highlighter(self.state.bufnr, 'json')
+        end,
+      },
+
+      attach_mappings = function(prompt_bufnr)
+        actions.select_default:replace(function()
+          local selection = action_state.get_selected_entry()
+          actions.close(prompt_bufnr)
+          local cmd = { 'account', 'set', '--subscription', selection.value.name }
+          M.call(cmd)
+        end)
+        return true
+      end,
+    })
+    :find()
+end
 return M
