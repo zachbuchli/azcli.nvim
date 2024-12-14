@@ -1,2 +1,3 @@
-# template.nvim
-Neovim Plugin template repo
+# azcli.nvim
+
+Neovim plugin that wraps the Azure CLI.
