@@ -4,7 +4,6 @@ local actions = require 'telescope.actions'
 local action_state = require 'telescope.actions.state'
 local finders = require 'telescope.finders'
 local previewers = require 'telescope.previewers'
-local themes = require 'telescope.themes'
 
 local M = {}
 
@@ -183,13 +182,4 @@ M.webapp_logs = function(opts)
     })
     :find()
 end
-
-M.test_logs = function()
-  M.webapp_logs(themes.get_ivy {})
-end
-
-M.test_subs = function()
-  M.subscriptions(themes.get_ivy {})
-end
-
 return M
