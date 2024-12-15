@@ -7,11 +7,6 @@ local previewers = require 'telescope.previewers'
 
 local M = {}
 
--- setup is often used to setup defaults/config for a plugin.
-M.setup = function(opts)
-  opts = opts or {}
-end
-
 ---Open a floating window used to display az cli
 ---@param cmd string[]
 ---@param opts? {win?:integer}
@@ -66,9 +61,7 @@ M.call = function(cmd)
   return response
 end
 
---print(vim.inspect(M.call { 'account', 'list' }))
-
--- telescope extension for picking active azcli set subscription
+-- telescope extension for picking active azcli subscription
 M.subscriptions = function(opts)
   local results = M.call { 'account', 'list' }
   local account = M.call { 'account', 'show' }
@@ -125,7 +118,7 @@ M.subscriptions = function(opts)
     :find()
 end
 
--- telescope extension for picking which logs to view.
+-- telescope extension for picking which web app logs to view.
 M.webapp_logs = function(opts)
   local results = M.call { 'webapp', 'list' }
   local account = M.call { 'account', 'show' }
