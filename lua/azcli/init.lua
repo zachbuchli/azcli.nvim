@@ -4,8 +4,7 @@ local actions = require 'telescope.actions'
 local action_state = require 'telescope.actions.state'
 local finders = require 'telescope.finders'
 local previewers = require 'telescope.previewers'
-local utils = require 'telescope.previewers.utils'
---local plenary = require 'plenary'
+local themes = require 'telescope.themes'
 
 local M = {}
 
@@ -35,6 +34,8 @@ function M.show(cmd, opts)
     row = math.ceil((vim.o.lines - height) / 2),
     col = math.ceil((vim.o.columns - width) / 2),
     border = 'single',
+    title = opts.title or 'Azure CLI',
+    title_pos = 'center',
   })
 
   -- set buffer local keymap for easy exits
@@ -44,11 +45,12 @@ function M.show(cmd, opts)
   vim.api.nvim_set_current_win(win)
 
   vim.fn.termopen { 'az', unpack(cmd) }
+  vim.cmd '$'
 end
 
 ---Call azcli with cmd and return results as table.
----@return table|nil, string?
 ---@param cmd string[]
+---@return table|nil, string?
 M.call = function(cmd)
   if vim.list_contains(cmd, '-o') or vim.list_contains(cmd, '--output') then
     return nil, 'Only json output is supported.'
@@ -67,16 +69,18 @@ end
 
 --print(vim.inspect(M.call { 'account', 'list' }))
 
--- telescope extension for picking active azcli account
-M.account_list = function(opts)
+-- telescope extension for picking active azcli set subscription
+M.subscriptions = function(opts)
+  local results = M.call { 'account', 'list' }
+  local account = M.call { 'account', 'show' }
+  account = account or {}
+  local prompt_title = string.format('Set Subscription (Current = %s)', account.name or '')
   pickers
     .new(opts, {
-      finder = finders.new_dynamic {
-        fn = function()
-          local results = M.call { 'account', 'list' }
-          return results
-        end,
-
+      prompt_title = prompt_title,
+      results_title = 'Azure Subscriptions',
+      finder = finders.new_table {
+        results = results,
         entry_maker = function(entry)
           if entry then
             return {
@@ -91,7 +95,7 @@ M.account_list = function(opts)
       sorter = conf.generic_sorter(opts),
 
       previewer = previewers.new_buffer_previewer {
-        title = 'Subscription Info',
+        title = 'Subscription Details',
         define_preview = function(self, entry)
           local lines = {}
           for k, v in pairs(entry.value) do
@@ -109,7 +113,7 @@ M.account_list = function(opts)
           local selection = action_state.get_selected_entry()
           actions.close(prompt_bufnr)
           local cmd = { 'account', 'set', '--subscription', selection.value.name }
-          local results, err = M.call(cmd)
+          local _, err = M.call(cmd)
           if err then
             vim.notify(err)
           else
@@ -121,4 +125,71 @@ M.account_list = function(opts)
     })
     :find()
 end
+
+-- telescope extension for picking which logs to view.
+M.webapp_logs = function(opts)
+  local results = M.call { 'webapp', 'list' }
+  local account = M.call { 'account', 'show' }
+  account = account or {}
+  local prompt_title = string.format('Choose log to view (Sub = %s)', account.name or '')
+  pickers
+    .new(opts, {
+      prompt_title = prompt_title,
+      results_title = 'Azure Webapps',
+      finder = finders.new_table {
+        results = results,
+        entry_maker = function(entry)
+          if entry then
+            return {
+              value = entry,
+              display = entry.name,
+              ordinal = entry.name .. ' ' .. entry.resourceGroup .. ' ' .. entry.state,
+            }
+          end
+        end,
+      },
+
+      sorter = conf.generic_sorter(opts),
+
+      previewer = previewers.new_buffer_previewer {
+        title = 'Web App Details',
+        define_preview = function(self, entry)
+          local lines = {
+            string.format('name: %s', entry.value.name),
+            string.format('resource group: %s', entry.value.resourceGroup),
+            string.format('location: %s', entry.value.location),
+            string.format('state: %s', entry.value.state),
+          }
+          for k, v in pairs(entry.value.tags) do
+            local line = string.format('tag: %s = %s', k, v)
+            table.insert(lines, line)
+          end
+          vim.api.nvim_buf_set_lines(self.state.bufnr, 0, 0, true, lines)
+        end,
+      },
+
+      attach_mappings = function(prompt_bufnr)
+        actions.select_default:replace(function()
+          local selection = action_state.get_selected_entry()
+          actions.close(prompt_bufnr)
+          local name = selection.value.name
+          local rg = selection.value.resourceGroup
+          local cmd = { 'webapp', 'log', 'tail', '-g', rg, '-n', name }
+          local title = string.format('%s log tail', name)
+          M.show(cmd, { start_insert = true, title = title })
+        end)
+        return true
+      end,
+    })
+    :find()
+end
+
+M.test_logs = function()
+  M.webapp_logs(themes.get_ivy {})
+end
+
+M.test_subs = function()
+  M.subscriptions(themes.get_ivy {})
+end
+
 return M
