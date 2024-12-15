@@ -44,7 +44,7 @@ function M.show(cmd, opts)
   end
 
   vim.fn.termopen { 'az', unpack(cmd) }
-  vim.cmd '$'
+  vim.cmd 'execute "normal G"'
 end
 
 ---Call azcli with cmd and return results as table.
