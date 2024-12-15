@@ -32,11 +32,16 @@ function M.show(cmd, opts)
     title_pos = 'center',
   })
 
-  -- set buffer local keymap for easy exits
-  vim.keymap.set('n', 'q', ':q<CR>', { buffer = buf, silent = true })
+  vim.keymap.set('n', 'q', ':q<CR>', { buffer = buf, silent = true, desc = 'buffer local keymap to close floating buf' })
+  vim.keymap.set('n', 't', '<C-w>T', { buffer = buf, silent = true, desc = 'buffer local keymap to move buf to new tab' })
 
   -- Change to the window that is floating to ensure termopen uses correct size
   vim.api.nvim_set_current_win(win)
+
+  if opts.color_output then
+    table.insert(cmd, '-o')
+    table.insert(cmd, 'jsonc')
+  end
 
   vim.fn.termopen { 'az', unpack(cmd) }
   vim.cmd '$'
